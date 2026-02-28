@@ -131,7 +131,7 @@ function LogoMark({ className }: { className?: string }) {
   );
 }
 
-({ done, active }: { done: boolean; active: boolean }) {
+function StepDot({ done, active }: { done: boolean; active: boolean }) {
   return (
     <div
       className={cn(

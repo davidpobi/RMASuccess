@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback, useId, useEffect } from "react";
 import { cn } from "@/lib/utils";
-import { ChevronDown, CheckCheck, ArrowRight, RotateCcw, Sun, Moon } from "lucide-react";
+import { ChevronDown, ArrowRight, RotateCcw, Sun, Moon } from "lucide-react";
 
 const RMA_TYPES = [
   "Comp.",
@@ -106,8 +106,32 @@ function selectCls(active: boolean, empty: boolean) {
   );
 }
 
-// Step indicator showing section progress
-function StepDot({ done, active }: { done: boolean; active: boolean }) {
+// Minimal scope/crosshair logo mark — medical device precision
+function LogoMark({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 32 32"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      aria-hidden="true"
+    >
+      {/* Outer circle */}
+      <circle cx="16" cy="16" r="13.5" stroke="currentColor" strokeWidth="1.2" />
+      {/* Inner circle */}
+      <circle cx="16" cy="16" r="5" stroke="currentColor" strokeWidth="1.2" />
+      {/* Crosshair lines */}
+      <line x1="16" y1="2" x2="16" y2="10.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+      <line x1="16" y1="21.5" x2="16" y2="30" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+      <line x1="2" y1="16" x2="10.5" y2="16" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+      <line x1="21.5" y1="16" x2="30" y2="16" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+      {/* Center dot */}
+      <circle cx="16" cy="16" r="1.5" fill="currentColor" />
+    </svg>
+  );
+}
+
+({ done, active }: { done: boolean; active: boolean }) {
   return (
     <div
       className={cn(
@@ -187,12 +211,10 @@ export default function RmaForm() {
         <div className="w-full max-w-lg">
           {/* Success header */}
           <div className="mb-10">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 rounded-full bg-foreground flex items-center justify-center">
-                <CheckCheck className="w-5 h-5 text-background" strokeWidth={2} />
-              </div>
-              <div className="h-px flex-1 bg-foreground/20" />
-              <span className="text-xs font-semibold tracking-widest text-muted-foreground">SUBMITTED</span>
+            <div className="flex items-center gap-3 mb-7">
+              <LogoMark className="w-8 h-8 text-accent" />
+              <div className="h-px flex-1 bg-border" />
+              <span className="text-[9px] font-mono font-semibold tracking-[0.14em] text-accent">SUBMITTED</span>
             </div>
             <h1 className="text-4xl font-bold text-foreground tracking-tight leading-tight text-balance">
               RMA Request<br />Received
@@ -251,15 +273,24 @@ export default function RmaForm() {
     <div className="min-h-screen bg-background font-sans">
       {/* Top bar */}
       <header className="fixed top-0 inset-x-0 z-20 bg-background/90 backdrop-blur-sm border-b border-border">
-        <div className="max-w-2xl mx-auto px-6 h-12 flex items-center justify-between">
-          <span className="text-xs font-semibold tracking-widest text-foreground">RMA FORM</span>
+        <div className="max-w-2xl mx-auto px-6 h-14 flex items-center justify-between">
+          {/* Logo + wordmark */}
+          <div className="flex items-center gap-2.5">
+            <LogoMark className="w-7 h-7 text-accent" />
+            <div className="flex flex-col leading-none">
+              <span className="text-[13px] font-bold tracking-tight text-foreground">CLARUSMED</span>
+              <span className="text-[9px] font-medium tracking-[0.12em] text-muted-foreground mt-0.5">MEDICAL DEVICES</span>
+            </div>
+            <div className="hidden sm:block w-px h-5 bg-border mx-2" />
+            <span className="hidden sm:block text-[10px] font-semibold tracking-[0.1em] text-muted-foreground">RMA PORTAL</span>
+          </div>
           <div className="flex items-center gap-4">
             <div className="hidden sm:flex items-center gap-1.5">
               <StepDot done={s1done} active={s1active} />
               <StepDot done={s2done} active={s2active} />
               <StepDot done={false} active={s3active} />
             </div>
-            <span className="text-xs text-muted-foreground font-mono tabular-nums">
+            <span className="text-[11px] text-muted-foreground font-mono tabular-nums">
               {completedCount}/{FIELD_ORDER.length}
             </span>
             <button
@@ -281,18 +312,21 @@ export default function RmaForm() {
         </div>
       </header>
 
-      <main className="pt-20 pb-20 max-w-2xl mx-auto px-6">
+      <main className="pt-24 pb-20 max-w-2xl mx-auto px-6">
         {/* Page title */}
         <div className="mb-12">
-          <p className="text-[11px] font-semibold tracking-[0.1em] text-accent mb-3">
-            RETURN MERCHANDISE AUTHORIZATION
-          </p>
-          <h1 className="text-[2.5rem] font-bold leading-[1.1] tracking-tight text-foreground text-balance">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-1 h-4 bg-accent" />
+            <p className="text-[10px] font-semibold tracking-[0.14em] text-accent">
+              RETURN MERCHANDISE AUTHORIZATION
+            </p>
+          </div>
+          <h1 className="text-[2.6rem] font-bold leading-[1.08] tracking-tight text-foreground text-balance">
             Submit a<br />Return Request
           </h1>
           <p className="mt-4 text-sm text-muted-foreground leading-relaxed max-w-sm">
-            Fill in all required fields and use{" "}
-            <kbd className="font-mono text-[11px] border border-border rounded px-1.5 py-0.5 text-foreground bg-card">
+            Complete all fields below. Use{" "}
+            <kbd className="font-mono text-[11px] border border-border rounded px-1.5 py-0.5 text-foreground bg-muted">
               Tab
             </kbd>{" "}
             to move between fields.
@@ -301,18 +335,18 @@ export default function RmaForm() {
 
         <form ref={formRef} onSubmit={handleSubmit} noValidate>
           {/* ── Section 1: Return Information ── */}
-          <section className="mb-12">
-            <div className="flex items-center gap-4 mb-8">
-              <div className="flex items-center gap-2">
-                <div className={cn(
-                  "w-5 h-5 rounded-full border-2 flex items-center justify-center text-[10px] font-bold transition-all",
-                  s1done ? "border-foreground bg-foreground text-background" : "border-muted-foreground text-muted-foreground"
-                )}>
-                  {s1done ? <CheckCheck className="w-3 h-3" /> : "1"}
-                </div>
-                <span className="text-xs font-semibold tracking-widest text-foreground">RETURN INFORMATION</span>
-              </div>
+          <section className="mb-14">
+            <div className="flex items-center gap-3 mb-8">
+              <div className={cn(
+                "w-0.5 h-5 transition-all duration-300",
+                s1done ? "bg-accent" : s1active ? "bg-accent" : "bg-border"
+              )} />
+              <span className={cn(
+                "text-[10px] font-bold tracking-[0.14em] transition-colors duration-200",
+                s1active ? "text-accent" : s1done ? "text-foreground" : "text-muted-foreground"
+              )}>RETURN INFORMATION</span>
               <div className="flex-1 h-px bg-border" />
+              {s1done && <span className="text-[9px] font-mono text-accent tracking-wider">COMPLETE</span>}
             </div>
 
             <div className="grid grid-cols-6 gap-x-6 gap-y-8">
@@ -404,18 +438,18 @@ export default function RmaForm() {
           </section>
 
           {/* ── Section 2: Product Details ── */}
-          <section className="mb-12">
-            <div className="flex items-center gap-4 mb-8">
-              <div className="flex items-center gap-2">
-                <div className={cn(
-                  "w-5 h-5 rounded-full border-2 flex items-center justify-center text-[10px] font-bold transition-all",
-                  s2done ? "border-foreground bg-foreground text-background" : "border-muted-foreground text-muted-foreground"
-                )}>
-                  {s2done ? <CheckCheck className="w-3 h-3" /> : "2"}
-                </div>
-                <span className="text-xs font-semibold tracking-widest text-foreground">PRODUCT DETAILS</span>
-              </div>
+          <section className="mb-14">
+            <div className="flex items-center gap-3 mb-8">
+              <div className={cn(
+                "w-0.5 h-5 transition-all duration-300",
+                s2done ? "bg-accent" : s2active ? "bg-accent" : "bg-border"
+              )} />
+              <span className={cn(
+                "text-[10px] font-bold tracking-[0.14em] transition-colors duration-200",
+                s2active ? "text-accent" : s2done ? "text-foreground" : "text-muted-foreground"
+              )}>PRODUCT DETAILS</span>
               <div className="flex-1 h-px bg-border" />
+              {s2done && <span className="text-[9px] font-mono text-accent tracking-wider">COMPLETE</span>}
             </div>
 
             <div className="grid grid-cols-6 gap-x-6 gap-y-8">
@@ -501,18 +535,18 @@ export default function RmaForm() {
           </section>
 
           {/* ── Section 3: Description ── */}
-          <section className="mb-12">
-            <div className="flex items-center gap-4 mb-8">
-              <div className="flex items-center gap-2">
-                <div className={cn(
-                  "w-5 h-5 rounded-full border-2 flex items-center justify-center text-[10px] font-bold transition-all",
-                  filled("customerDescription") ? "border-foreground bg-foreground text-background" : "border-muted-foreground text-muted-foreground"
-                )}>
-                  {filled("customerDescription") ? <CheckCheck className="w-3 h-3" /> : "3"}
-                </div>
-                <span className="text-xs font-semibold tracking-widest text-foreground">CUSTOMER DESCRIPTION</span>
-              </div>
+          <section className="mb-14">
+            <div className="flex items-center gap-3 mb-8">
+              <div className={cn(
+                "w-0.5 h-5 transition-all duration-300",
+                filled("customerDescription") ? "bg-accent" : s3active ? "bg-accent" : "bg-border"
+              )} />
+              <span className={cn(
+                "text-[10px] font-bold tracking-[0.14em] transition-colors duration-200",
+                s3active ? "text-accent" : filled("customerDescription") ? "text-foreground" : "text-muted-foreground"
+              )}>CUSTOMER DESCRIPTION</span>
               <div className="flex-1 h-px bg-border" />
+              {filled("customerDescription") && <span className="text-[9px] font-mono text-accent tracking-wider">COMPLETE</span>}
             </div>
 
             <FieldWrap

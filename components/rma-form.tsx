@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useRef, useCallback, useId } from "react";
+import { useState, useRef, useCallback, useId, useEffect } from "react";
 import { cn } from "@/lib/utils";
-import { ChevronDown, CheckCheck, ArrowRight, RotateCcw } from "lucide-react";
+import { ChevronDown, CheckCheck, ArrowRight, RotateCcw, Sun, Moon } from "lucide-react";
 
 const RMA_TYPES = [
   "Comp.",
@@ -122,8 +122,18 @@ export default function RmaForm() {
   const [form, setForm] = useState<FormData>(INITIAL_FORM);
   const [submitted, setSubmitted] = useState(false);
   const [active, setActive] = useState<keyof FormData | null>(null);
+  const [dark, setDark] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
   const id = useId();
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (dark) {
+      root.classList.add("dark");
+    } else {
+      root.classList.remove("dark");
+    }
+  }, [dark]);
 
   const fieldId = (name: string) => `${id}-${name}`;
 
@@ -165,6 +175,15 @@ export default function RmaForm() {
   if (submitted) {
     return (
       <div className="min-h-screen bg-background font-sans flex items-center justify-center p-6">
+        {/* Toggle on success screen */}
+        <button
+          type="button"
+          onClick={() => setDark((d) => !d)}
+          aria-label={dark ? "Switch to day mode" : "Switch to night mode"}
+          className="fixed top-3 right-6 w-8 h-8 flex items-center justify-center rounded-full border border-border text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-all duration-200 z-20"
+        >
+          {dark ? <Sun className="w-3.5 h-3.5" strokeWidth={2} /> : <Moon className="w-3.5 h-3.5" strokeWidth={2} />}
+        </button>
         <div className="w-full max-w-lg">
           {/* Success header */}
           <div className="mb-10">
@@ -234,7 +253,7 @@ export default function RmaForm() {
       <header className="fixed top-0 inset-x-0 z-20 bg-background/90 backdrop-blur-sm border-b border-border">
         <div className="max-w-2xl mx-auto px-6 h-12 flex items-center justify-between">
           <span className="text-xs font-semibold tracking-widest text-foreground">RMA FORM</span>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-4">
             <div className="hidden sm:flex items-center gap-1.5">
               <StepDot done={s1done} active={s1active} />
               <StepDot done={s2done} active={s2active} />
@@ -243,6 +262,14 @@ export default function RmaForm() {
             <span className="text-xs text-muted-foreground font-mono tabular-nums">
               {completedCount}/{FIELD_ORDER.length}
             </span>
+            <button
+              type="button"
+              onClick={() => setDark((d) => !d)}
+              aria-label={dark ? "Switch to day mode" : "Switch to night mode"}
+              className="w-8 h-8 flex items-center justify-center rounded-full border border-border text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-all duration-200"
+            >
+              {dark ? <Sun className="w-3.5 h-3.5" strokeWidth={2} /> : <Moon className="w-3.5 h-3.5" strokeWidth={2} />}
+            </button>
           </div>
         </div>
         {/* Progress bar */}

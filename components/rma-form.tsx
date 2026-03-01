@@ -297,7 +297,7 @@ export default function RmaForm() {
           <div className="flex items-center gap-2.5">
             <LogoMark className="w-7 h-7 text-accent" />
             <div className="flex flex-col leading-none">
-              <span className="text-[13px] font-bold tracking-tight text-foreground">CLARUSMED</span>
+              <span className="text-[13px] font-bold tracking-tight text-foreground">RMASuccess</span>
               <span className="text-[9px] font-medium tracking-[0.12em] text-muted-foreground mt-0.5">MEDICAL DEVICES</span>
             </div>
             <div className="hidden sm:block w-px h-5 bg-border mx-2" />

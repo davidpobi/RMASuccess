@@ -147,6 +147,7 @@ export default function RmaForm() {
   const [submitted, setSubmitted] = useState(false);
   const [active, setActive] = useState<keyof FormData | null>(null);
   const [dark, setDark] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
   const id = useId();
 
@@ -185,9 +186,27 @@ export default function RmaForm() {
   const s2active = section2Fields.some((f) => f === active);
   const s3active = active === "customerDescription";
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitted(true);
+    setSubmitting(true);
+    try {
+      const response = await fetch("/api/send-rma", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      if (response.ok) {
+        setSubmitted(true);
+      } else {
+        console.error("[v0] Failed to submit RMA:", await response.text());
+        alert("Failed to submit RMA. Please try again.");
+      }
+    } catch (error) {
+      console.error("[v0] Submit error:", error);
+      alert("Error submitting RMA. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleReset = () => {
@@ -589,6 +608,7 @@ export default function RmaForm() {
             </button>
             <button
               type="submit"
+              disabled={submitting}
               className={cn(
                 "inline-flex items-center gap-2 px-6 h-11 rounded-full font-semibold text-sm",
                 "bg-foreground text-background",
@@ -597,8 +617,8 @@ export default function RmaForm() {
                 "disabled:opacity-40 disabled:cursor-not-allowed"
               )}
             >
-              Submit RMA
-              <ArrowRight className="w-4 h-4" strokeWidth={2.5} />
+              {submitting ? "Submitting..." : "Submit RMA"}
+              {!submitting && <ArrowRight className="w-4 h-4" strokeWidth={2.5} />}
             </button>
           </div>
         </form>

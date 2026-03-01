@@ -57,7 +57,7 @@ ${data.customerDescription}
 
     // Send email to all business addresses
     const response = await resend.emails.send({
-      from: "noreply@clarusmed.com",
+      from: process.env.SENDER_MAIL || "noreply@clarusmed.com",
       to: businessMails,
       subject: `RMA Submission - ${data.rmaNumber} - ${data.customer}`,
       text: emailBody,

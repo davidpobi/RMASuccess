@@ -175,6 +175,16 @@ export default function RmaForm() {
 
   const completedCount = FIELD_ORDER.filter(filled).length;
   const pct = Math.round((completedCount / FIELD_ORDER.length) * 100);
+  const requiredFields: (keyof FormData)[] = [
+    "rmaNumber",
+    "customer",
+    "dateOpened",
+    "rmaType",
+    "productName",
+    "modelNumber",
+    "quantityReturned",
+  ];
+  const allComplete = requiredFields.every(filled);
 
   // Section completion
   const section1Fields: (keyof FormData)[] = ["rmaNumber", "customer", "dateOpened", "initial", "rmaType"];

@@ -7,7 +7,7 @@ const _inter = Inter({ subsets: ["latin"] });
 const _jetbrainsMono = JetBrains_Mono({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'RMA Submission Form',
+  title: 'RMASuccess',
   description: 'Submit a Return Merchandise Authorization request',
   generator: 'v0.app',
   icons: {

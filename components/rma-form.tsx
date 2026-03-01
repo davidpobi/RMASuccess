@@ -147,8 +147,6 @@ export default function RmaForm() {
   const [submitted, setSubmitted] = useState(false);
   const [active, setActive] = useState<keyof FormData | null>(null);
   const [dark, setDark] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const id = useId();
 
@@ -175,16 +173,6 @@ export default function RmaForm() {
 
   const completedCount = FIELD_ORDER.filter(filled).length;
   const pct = Math.round((completedCount / FIELD_ORDER.length) * 100);
-  const requiredFields: (keyof FormData)[] = [
-    "rmaNumber",
-    "customer",
-    "dateOpened",
-    "rmaType",
-    "productName",
-    "modelNumber",
-    "quantityReturned",
-  ];
-  const allComplete = requiredFields.every(filled);
 
   // Section completion
   const section1Fields: (keyof FormData)[] = ["rmaNumber", "customer", "dateOpened", "initial", "rmaType"];
@@ -197,33 +185,9 @@ export default function RmaForm() {
   const s2active = section2Fields.some((f) => f === active);
   const s3active = active === "customerDescription";
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    setError(null);
-
-    try {
-      const response = await fetch("/api/rma/submit", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        setError(data.error || "Failed to submit RMA");
-        setLoading(false);
-        return;
-      }
-
-      setSubmitted(true);
-      setLoading(false);
-    } catch (err) {
-      setError("An error occurred while submitting. Please try again.");
-      setLoading(false);
-      console.error("[v0] Submit error:", err);
-    }
+    setSubmitted(true);
   };
 
   const handleReset = () => {
@@ -614,25 +578,6 @@ export default function RmaForm() {
             </FieldWrap>
           </section>
 
-          {/* Error message */}
-          {error && (
-            <div className="mb-8 p-4 rounded-lg bg-destructive/10 border border-destructive/30 flex items-start gap-3">
-              <div className="flex-1">
-                <p className="text-sm font-medium text-destructive">{error}</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setError(null)}
-                className="text-destructive hover:text-destructive/80 transition-colors"
-              >
-                <span className="sr-only">Dismiss</span>
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                </svg>
-              </button>
-            </div>
-          )}
-
           {/* ── Actions ── */}
           <div className="flex items-center justify-between gap-4 pt-2">
             <button
@@ -644,7 +589,6 @@ export default function RmaForm() {
             </button>
             <button
               type="submit"
-              disabled={loading || !allComplete}
               className={cn(
                 "inline-flex items-center gap-2 px-6 h-11 rounded-full font-semibold text-sm",
                 "bg-foreground text-background",
@@ -653,8 +597,8 @@ export default function RmaForm() {
                 "disabled:opacity-40 disabled:cursor-not-allowed"
               )}
             >
-              {loading ? "Submitting..." : "Submit RMA"}
-              {!loading && <ArrowRight className="w-4 h-4" strokeWidth={2.5} />}
+              Submit RMA
+              <ArrowRight className="w-4 h-4" strokeWidth={2.5} />
             </button>
           </div>
         </form>

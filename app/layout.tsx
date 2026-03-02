@@ -18,10 +18,16 @@ export const metadata: Metadata = {
     siteName: 'RMASuccess',
     images: [
       {
-        url: '/og-image.jpg',
+        url: '/og-image-day.jpg',
         width: 1200,
         height: 630,
-        alt: 'RMASuccess — Medical Device Return Merchandise Authorization Portal',
+        alt: 'RMASuccess — Medical Device RMA Portal, daytime warehouse setting',
+      },
+      {
+        url: '/og-image-night.jpg',
+        width: 1200,
+        height: 630,
+        alt: 'RMASuccess — Medical Device RMA Portal, night warehouse setting',
       },
     ],
   },
@@ -29,7 +35,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'RMASuccess — Medical Device RMA Portal',
     description: 'Submit a Return Merchandise Authorization request for medical devices quickly and accurately.',
-    images: ['/og-image.jpg'],
+    images: ['/og-image-day.jpg'],
   },
   icons: {
     icon: [

@@ -1,13 +1,5 @@
 import { z } from "zod";
-
-export const RMA_TYPES = [
-  "Comp.",
-  "Repair",
-  "Replace",
-  "Credit",
-  "Evaluation",
-  "Other",
-] as const;
+import { IRmaFieldErrors, IRmaSubmission, IRmaValidationResult, RmaField, RmaType } from "@/interfaces/rma";
 
 const SINGLE_LINE = /^[^\r\n]*$/;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -28,23 +20,20 @@ const optionalText = (label: string, max: number) =>
     .regex(SINGLE_LINE, `${label} must be a single line`)
     .default("");
 
-function isRealDate(value: string) {
+const isRealDate = (value: string) => {
   const date = new Date(`${value}T00:00:00Z`);
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
-}
+};
 
 // One day of tolerance so a client ahead of the server's timezone isn't rejected.
-function isNotFuture(value: string) {
+const isNotFuture = (value: string) => {
   const tomorrow = new Date();
   tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
   return value <= tomorrow.toISOString().slice(0, 10);
-}
+};
 
 export const rmaSchema = z.object({
-  rmaNumber: requiredText("RMA #", 32).regex(
-    /^[A-Za-z0-9-]+$/,
-    "Use letters, numbers and hyphens only"
-  ),
+  rmaNumber: requiredText("RMA #", 32).regex(/^[A-Za-z0-9-]+$/, "Use letters, numbers and hyphens only"),
   customer: requiredText("Customer", 120),
   dateOpened: z
     .string({ required_error: "Date opened is required" })
@@ -56,9 +45,7 @@ export const rmaSchema = z.object({
   initial: optionalText("Initial", 4)
     .refine((v) => /^[A-Za-z]*$/.test(v), "Use letters only")
     .transform((v) => v.toUpperCase()),
-  rmaType: z.enum(RMA_TYPES, {
-    errorMap: () => ({ message: "Select an RMA type" }),
-  }),
+  rmaType: z.nativeEnum(RmaType, { errorMap: () => ({ message: "Select an RMA type" }) }),
   productName: requiredText("Product name", 200),
   modelNumber: requiredText("Model #", 64),
   productLine: optionalText("Product line", 120),
@@ -77,39 +64,44 @@ export const rmaSchema = z.object({
     .max(2000, "Description must be 2,000 characters or fewer"),
 });
 
-export type RmaFormData = z.input<typeof rmaSchema>;
-export type RmaSubmission = z.output<typeof rmaSchema>;
-export type RmaFieldErrors = Partial<Record<keyof RmaFormData, string>>;
-
-export type RmaValidationResult =
-  | { success: true; data: RmaSubmission }
-  | { success: false; errors: RmaFieldErrors };
-
-export function validateRma(input: unknown): RmaValidationResult {
+export const validateRma = (input: unknown): IRmaValidationResult => {
   const result = rmaSchema.safeParse(input);
-  if (result.success) return { success: true, data: result.data };
+  if (result.success) {
+    const data: IRmaSubmission = result.data;
+    return { success: true, data };
+  }
 
-  const errors: RmaFieldErrors = {};
+  const errors: IRmaFieldErrors = {};
   for (const issue of result.error.issues) {
-    const field = issue.path[0] as keyof RmaFormData | undefined;
+    const field = issue.path[0] as RmaField | undefined;
     if (field && !errors[field]) errors[field] = issue.message;
   }
   return { success: false, errors };
-}
+};
 
-export function validateRmaField(
-  field: keyof RmaFormData,
-  form: unknown
-): string | undefined {
-  const result = validateRma(form);
+export const validateRmaField = (field: RmaField, values: unknown): string | undefined => {
+  const result = validateRma(values);
   return result.success ? undefined : result.errors[field];
-}
+};
 
-export function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
+export const getRmaMailSubject = (rma: IRmaSubmission) => {
+  return `RMA #${rma.rmaNumber} — ${rma.customer}`;
+};
+
+export const getRmaMailText = (rma: IRmaSubmission) => {
+  return [
+    `RMA SUBMISSION — #${rma.rmaNumber}`,
+    `Customer: ${rma.customer}`,
+    `Date Opened: ${rma.dateOpened}`,
+    `Initial: ${rma.initial || "—"}`,
+    `RMA Type: ${rma.rmaType}`,
+    `Product Name: ${rma.productName}`,
+    `Model #: ${rma.modelNumber}`,
+    `Product Line: ${rma.productLine || "—"}`,
+    `Qty Returned: ${rma.quantityReturned}`,
+    `Serial / Lot #: ${rma.serialLotNumber || "—"}`,
+    ``,
+    `Description:`,
+    rma.customerDescription,
+  ].join("\n");
+};

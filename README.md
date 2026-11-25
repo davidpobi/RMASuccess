@@ -65,29 +65,45 @@ Errors appear inline, in plain language, next to the field that caused them. Sub
 
 ## What makes it interesting
 
-- **One schema, two boundaries** — [`lib/validations.ts`](./lib/validations.ts) defines the RMA contract once. The form uses it for live, per-field feedback; the API route uses it to reject anything malformed with field-level `400` errors. The types for both sides are inferred from the same source.
-- **Domain-aware rules** — RMA numbers are restricted to safe identifiers, dates must be real and not in the future, quantities must be whole numbers, RMA types come from a fixed list, and single-line fields can't smuggle in line breaks (which also protects the email subject line).
-- **Injection-safe email** — every user-supplied value is HTML-escaped before it is placed into the notification template, so a submission can't inject links or markup into a business inbox.
-- **Honest error handling** — invalid JSON and failed validation return `400`; missing server configuration returns `500` without crashing the route; provider failures return `502` instead of a false success.
+- **One schema, two boundaries** — [`utils/rmaUtils.ts`](./utils/rmaUtils.ts) defines the RMA rules once against the typed contract in [`interfaces/rma.ts`](./interfaces/rma.ts). The form uses it for live, per-field feedback; the API handler uses it to reject anything malformed with field-level `400` errors.
+- **Domain-aware rules** — RMA numbers are restricted to safe identifiers, dates must be real and not in the future, quantities must be whole numbers, RMA types come from a fixed enum, and single-line fields can't smuggle in line breaks (which also protects the email subject line).
+- **Injection-safe email** — the notification is a [React Email](https://react.email) component, so every user-supplied value is escaped by rendering; a submission can't inject links or markup into a business inbox. A readable plain-text version is sent alongside it.
+- **Layered, predictable API** — a thin `route.ts` switches on `operation` and delegates to an adjacent handler; side effects live in services, provider clients in `config/`, and every response has the same `{ success, data, message }` shape.
+- **Honest error handling** — invalid JSON and failed validation return `400`; missing server configuration returns `500` without crashing the route; provider failures return `502` instead of a false success. The UI surfaces these as toasts.
 - **Keyboard-first, accessible input** — labelled fields, `aria-invalid` / `aria-describedby` wiring for errors, focus moved to the first invalid field, and section-level progress indicators in the header.
 - **Considered visual design** — a precise, medical-device aesthetic with a crosshair mark, day/night themes, a live progress bar, and an email template that matches the product.
 
 ## Architecture
 
+Code is organised by responsibility: **interfaces** describe shapes, **services** perform side effects, **utils** hold pure helpers, and **routes** translate HTTP into handler calls.
+
 ```text
-app/
-  page.tsx                  → renders the form
-  layout.tsx                → metadata, Open Graph images, analytics
-  api/send-rma/route.ts     → parse → validate → build email → send via Resend
+interfaces/rma.ts                       RmaType enum, submission, field-error and response contracts
+services/rma.service.ts                 submitRma() → POST /api/send-rma { operation: "submitRma", data }
+utils/rmaUtils.ts                       Zod schema, validateRma / validateRmaField, mail subject + text
 components/
-  rma-form.tsx              → form state, live validation, receipt screen
-lib/
-  validations.ts            → Zod schema, inferred types, field validation, HTML escaping
+  Rma/RmaForm.tsx                       form state, live validation, toasts, receipt screen
+  Rma/FieldWrap.tsx                     labelled field with inline error / hint
+  General/LogoMark.tsx                  crosshair brand mark
+  Mail/RmaSubmissionMail.tsx            React Email notification template
+app/api/
+  (routes)/send-rma/route.ts            POST → switch (operation) → handler
+  (routes)/send-rma/sendRma.ts          handleSubmitRma: validate → check config → send
+  services/mail.service.ts              render template → send via Resend → { success, data, error }
+  config/resend.ts                      lazily created Resend client
+  utils/mailUtils.ts                    recipients, sender, configuration check
+  interfaces/mails.ts                   mail contracts
+```
+
+```text
+RmaForm ── validateRma ──▶ rma.service ──▶ route.ts ──▶ sendRma.ts ── validateRma ──▶ mail.service ──▶ Resend
+                                                                                              │
+                                                                                 RmaSubmissionMail
 ```
 
 ## Stack
 
-Next.js · React · TypeScript · Tailwind CSS · Zod · Resend · Vercel Analytics
+Next.js · React · TypeScript · Tailwind CSS · Zod · Resend · React Email · Sonner · Vercel Analytics
 
 ## Run locally
 

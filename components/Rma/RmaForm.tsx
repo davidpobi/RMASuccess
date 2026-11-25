@@ -1,19 +1,18 @@
 "use client";
 
-import { useState, useRef, useId, useEffect } from "react";
+import { useEffect, useId, useState } from "react";
+import { toast } from "sonner";
+import { ArrowRight, ChevronDown, Moon, RotateCcw, Sun } from "lucide-react";
 import { cn } from "@/lib/utils";
-import {
-  RMA_TYPES,
-  validateRma,
-  validateRmaField,
-  type RmaFieldErrors,
-  type RmaFormData,
-} from "@/lib/validations";
-import { ChevronDown, ArrowRight, RotateCcw, Sun, Moon } from "lucide-react";
+import { IRmaFieldErrors, IRmaFormValues, RmaField, RmaType } from "@/interfaces/rma";
+import { submitRma } from "@/services/rma.service";
+import { validateRma, validateRmaField } from "@/utils/rmaUtils";
+import { LogoMark } from "@/components/General/LogoMark";
+import { FieldWrap, borderCls, inputCls, selectCls } from "@/components/Rma/FieldWrap";
 
-type FormData = Record<keyof RmaFormData, string>;
+const RMA_TYPE_OPTIONS = Object.values(RmaType);
 
-const INITIAL_FORM: FormData = {
+const INITIAL_FORM: IRmaFormValues = {
   rmaNumber: "",
   customer: "",
   dateOpened: "",
@@ -27,7 +26,7 @@ const INITIAL_FORM: FormData = {
   customerDescription: "",
 };
 
-const FIELD_ORDER: (keyof FormData)[] = [
+const FIELD_ORDER: RmaField[] = [
   "rmaNumber",
   "customer",
   "dateOpened",
@@ -41,97 +40,16 @@ const FIELD_ORDER: (keyof FormData)[] = [
   "customerDescription",
 ];
 
-interface FieldWrapProps {
-  label: string;
-  required?: boolean;
-  hint?: string;
-  error?: string;
-  children: React.ReactNode;
-  active?: boolean;
-  filled?: boolean;
-  htmlFor: string;
-}
-
-function FieldWrap({ label, required, hint, error, children, active, filled, htmlFor }: FieldWrapProps) {
-  return (
-    <div className="group relative">
-      <label
-        htmlFor={htmlFor}
-        className={cn(
-          "block text-[11px] font-semibold tracking-[0.08em] mb-2 transition-colors duration-150",
-          error ? "text-destructive" : active ? "text-accent" : filled ? "text-foreground" : "text-muted-foreground"
-        )}
-      >
-        {label}
-        {required && <span className="text-accent ml-1">*</span>}
-      </label>
-      {children}
-      {error ? (
-        <p id={`${htmlFor}-error`} className="mt-1.5 text-[11px] font-medium text-destructive">
-          {error}
-        </p>
-      ) : hint ? (
-        <p className="mt-1.5 text-[11px] text-muted-foreground">{hint}</p>
-      ) : null}
-    </div>
-  );
-}
-
-function borderCls(active: boolean, invalid: boolean) {
-  if (invalid) return "border-destructive";
-  return active ? "border-accent" : "border-border hover:border-foreground/30";
-}
-
-function inputCls(active: boolean, invalid = false) {
-  return cn(
-    "w-full h-11 bg-transparent font-sans text-sm text-foreground",
-    "border-0 border-b-2 outline-none transition-all duration-200",
-    "placeholder:text-muted-foreground/40",
-    borderCls(active, invalid)
-  );
-}
-
-function selectCls(active: boolean, empty: boolean, invalid = false) {
-  return cn(
-    "w-full h-11 bg-transparent font-sans text-sm appearance-none pr-8",
-    "border-0 border-b-2 outline-none transition-all duration-200 cursor-pointer",
-    borderCls(active, invalid),
-    empty ? "text-muted-foreground/40" : "text-foreground"
-  );
-}
-
-// Minimal scope/crosshair logo mark — medical device precision
-function LogoMark({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 32 32"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className={className}
-      aria-hidden="true"
-    >
-      {/* Outer circle */}
-      <circle cx="16" cy="16" r="13.5" stroke="currentColor" strokeWidth="1.2" />
-      {/* Inner circle */}
-      <circle cx="16" cy="16" r="5" stroke="currentColor" strokeWidth="1.2" />
-      {/* Crosshair lines */}
-      <line x1="16" y1="2" x2="16" y2="10.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-      <line x1="16" y1="21.5" x2="16" y2="30" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-      <line x1="2" y1="16" x2="10.5" y2="16" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-      <line x1="21.5" y1="16" x2="30" y2="16" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-      {/* Center dot */}
-      <circle cx="16" cy="16" r="1.5" fill="currentColor" />
-    </svg>
-  );
-}
+const SECTION_1_FIELDS: RmaField[] = ["rmaNumber", "customer", "dateOpened", "initial", "rmaType"];
+const SECTION_2_FIELDS: RmaField[] = ["productName", "modelNumber", "productLine", "quantityReturned", "serialLotNumber"];
 
 // Prevents the focused field from blurring on press: a blur-time error would
 // shift the layout and move the button out from under the click.
-function keepFieldFocus(e: React.MouseEvent) {
+const keepFieldFocus = (e: React.MouseEvent) => {
   e.preventDefault();
-}
+};
 
-function StepDot({ done, active }: { done: boolean; active: boolean }) {
+const StepDot = ({ done, active }: { done: boolean; active: boolean }) => {
   return (
     <div
       className={cn(
@@ -140,33 +58,39 @@ function StepDot({ done, active }: { done: boolean; active: boolean }) {
       )}
     />
   );
-}
+};
 
-export default function RmaForm() {
-  const [form, setForm] = useState<FormData>(INITIAL_FORM);
+export const RmaForm = () => {
+  const [form, setForm] = useState<IRmaFormValues>(INITIAL_FORM);
   const [submitted, setSubmitted] = useState(false);
-  const [active, setActive] = useState<keyof FormData | null>(null);
+  const [active, setActive] = useState<RmaField | null>(null);
   const [dark, setDark] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [errors, setErrors] = useState<RmaFieldErrors>({});
-  const [submitError, setSubmitError] = useState<string | null>(null);
-  const formRef = useRef<HTMLFormElement>(null);
+  const [errors, setErrors] = useState<IRmaFieldErrors>({});
   const id = useId();
 
   useEffect(() => {
-    const root = document.documentElement;
-    if (dark) {
-      root.classList.add("dark");
-    } else {
-      root.classList.remove("dark");
-    }
+    document.documentElement.classList.toggle("dark", dark);
   }, [dark]);
 
   const fieldId = (name: string) => `${id}-${name}`;
+  const filled = (field: RmaField) => form[field] !== "";
 
-  const set =
-    (field: keyof FormData) =>
-    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+  const completedCount = FIELD_ORDER.filter(filled).length;
+  const pct = Math.round((completedCount / FIELD_ORDER.length) * 100);
+
+  const s1done = SECTION_1_FIELDS.every(filled);
+  const s2done = SECTION_2_FIELDS.every(filled);
+  const s1active = SECTION_1_FIELDS.some((f) => f === active);
+  const s2active = SECTION_2_FIELDS.some((f) => f === active);
+  const s3active = active === "customerDescription";
+
+  const handleToggleTheme = () => {
+    setDark((d) => !d);
+  };
+
+  const handleFieldChange =
+    (field: RmaField) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
       const next = { ...form, [field]: e.target.value };
       setForm(next);
       // Re-check only fields already flagged so errors clear as they're fixed
@@ -175,83 +99,61 @@ export default function RmaForm() {
       }
     };
 
-  const handleBlur = (field: keyof FormData) => {
+  const handleFieldBlur = (field: RmaField) => {
     setActive(null);
     if (form[field] !== "" || errors[field]) {
       setErrors((prev) => ({ ...prev, [field]: validateRmaField(field, form) }));
     }
   };
 
-  const bind = (field: keyof FormData) => ({
+  const bind = (field: RmaField) => ({
     id: fieldId(field),
     name: field,
     value: form[field],
-    onChange: set(field),
+    onChange: handleFieldChange(field),
     onFocus: () => setActive(field),
-    onBlur: () => handleBlur(field),
+    onBlur: () => handleFieldBlur(field),
     "aria-invalid": errors[field] ? true : undefined,
     "aria-describedby": errors[field] ? `${fieldId(field)}-error` : undefined,
   });
 
-  const filled = (f: keyof FormData) => form[f] !== "";
+  const focusFirstInvalid = (fieldErrors: IRmaFieldErrors) => {
+    const firstInvalid = FIELD_ORDER.find((f) => fieldErrors[f]);
+    if (firstInvalid) document.getElementById(fieldId(firstInvalid))?.focus();
+  };
 
-  const completedCount = FIELD_ORDER.filter(filled).length;
-  const pct = Math.round((completedCount / FIELD_ORDER.length) * 100);
-
-  // Section completion
-  const section1Fields: (keyof FormData)[] = ["rmaNumber", "customer", "dateOpened", "initial", "rmaType"];
-  const section2Fields: (keyof FormData)[] = ["productName", "modelNumber", "productLine", "quantityReturned", "serialLotNumber"];
-  const section3Fields: (keyof FormData)[] = ["customerDescription"];
-
-  const s1done = section1Fields.every(filled);
-  const s2done = section2Fields.every(filled);
-  const s1active = section1Fields.some((f) => f === active);
-  const s2active = section2Fields.some((f) => f === active);
-  const s3active = active === "customerDescription";
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setSubmitError(null);
 
-    const result = validateRma(form);
-    if (!result.success) {
-      setErrors(result.errors);
-      const firstInvalid = FIELD_ORDER.find((f) => result.errors[f]);
-      if (firstInvalid) document.getElementById(fieldId(firstInvalid))?.focus();
+    const validation = validateRma(form);
+    if (!validation.success) {
+      setErrors(validation.errors);
+      focusFirstInvalid(validation.errors);
       return;
     }
 
     setErrors({});
     setSubmitting(true);
-    try {
-      const response = await fetch("/api/send-rma", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(result.data),
-      });
-      if (response.ok) {
-        setForm({ ...result.data });
-        setSubmitted(true);
-        return;
-      }
+    const result = await submitRma(validation.data);
+    setSubmitting(false);
 
-      const body = await response.json().catch(() => null);
-      if (response.status === 400 && body?.fieldErrors) {
-        setErrors(body.fieldErrors);
-      }
-      setSubmitError(body?.error ?? "Failed to submit RMA. Please try again.");
-    } catch (error) {
-      console.error("[rma-form] Submit error:", error);
-      setSubmitError("Network error while submitting. Please try again.");
-    } finally {
-      setSubmitting(false);
+    if (result.success) {
+      setForm({ ...validation.data });
+      setSubmitted(true);
+      return;
     }
+
+    const fieldErrors = result.data?.fieldErrors;
+    if (fieldErrors) {
+      setErrors(fieldErrors);
+      focusFirstInvalid(fieldErrors);
+    }
+    toast.error(result.message ?? "Failed to submit RMA. Please try again.");
   };
 
   const handleReset = () => {
     setForm(INITIAL_FORM);
     setErrors({});
-    setSubmitError(null);
     setSubmitted(false);
     setActive(null);
   };
@@ -262,7 +164,7 @@ export default function RmaForm() {
         {/* Toggle on success screen */}
         <button
           type="button"
-          onClick={() => setDark((d) => !d)}
+          onClick={handleToggleTheme}
           aria-label={dark ? "Switch to day mode" : "Switch to night mode"}
           className="fixed top-3 right-6 w-8 h-8 flex items-center justify-center rounded-full border border-border text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-all duration-200 z-20"
         >
@@ -318,6 +220,7 @@ export default function RmaForm() {
           </div>
 
           <button
+            type="button"
             onClick={handleReset}
             className="mt-6 flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors group"
           >
@@ -355,7 +258,7 @@ export default function RmaForm() {
             </span>
             <button
               type="button"
-              onClick={() => setDark((d) => !d)}
+              onClick={handleToggleTheme}
               aria-label={dark ? "Switch to day mode" : "Switch to night mode"}
               className="w-8 h-8 flex items-center justify-center rounded-full border border-border text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-all duration-200"
             >
@@ -393,7 +296,7 @@ export default function RmaForm() {
           </p>
         </div>
 
-        <form ref={formRef} onSubmit={handleSubmit} noValidate>
+        <form onSubmit={handleSubmit} noValidate>
           {/* ── Section 1: Return Information ── */}
           <section className="mb-14">
             <div className="flex items-center gap-3 mb-8">
@@ -466,7 +369,7 @@ export default function RmaForm() {
                       required
                     >
                       <option value="" disabled>Select...</option>
-                      {RMA_TYPES.map((t) => (
+                      {RMA_TYPE_OPTIONS.map((t) => (
                         <option key={t} value={t}>{t}</option>
                       ))}
                     </select>
@@ -594,11 +497,6 @@ export default function RmaForm() {
           </section>
 
           {/* ── Actions ── */}
-          {submitError && (
-            <p role="alert" className="mb-6 text-sm font-medium text-destructive">
-              {submitError}
-            </p>
-          )}
           <div className="flex items-center justify-between gap-4 pt-2">
             <button
               type="button"
@@ -628,4 +526,4 @@ export default function RmaForm() {
       </main>
     </div>
   );
-}
+};

@@ -1,31 +1,17 @@
 "use client";
 
-import { useState, useRef, useCallback, useId, useEffect } from "react";
+import { useState, useRef, useId, useEffect } from "react";
 import { cn } from "@/lib/utils";
+import {
+  RMA_TYPES,
+  validateRma,
+  validateRmaField,
+  type RmaFieldErrors,
+  type RmaFormData,
+} from "@/lib/validations";
 import { ChevronDown, ArrowRight, RotateCcw, Sun, Moon } from "lucide-react";
 
-const RMA_TYPES = [
-  "Comp.",
-  "Repair",
-  "Replace",
-  "Credit",
-  "Evaluation",
-  "Other",
-];
-
-interface FormData {
-  rmaNumber: string;
-  customer: string;
-  dateOpened: string;
-  initial: string;
-  rmaType: string;
-  productName: string;
-  modelNumber: string;
-  productLine: string;
-  quantityReturned: string;
-  serialLotNumber: string;
-  customerDescription: string;
-}
+type FormData = Record<keyof RmaFormData, string>;
 
 const INITIAL_FORM: FormData = {
   rmaNumber: "",
@@ -59,49 +45,57 @@ interface FieldWrapProps {
   label: string;
   required?: boolean;
   hint?: string;
+  error?: string;
   children: React.ReactNode;
   active?: boolean;
   filled?: boolean;
   htmlFor: string;
 }
 
-function FieldWrap({ label, required, hint, children, active, filled, htmlFor }: FieldWrapProps) {
+function FieldWrap({ label, required, hint, error, children, active, filled, htmlFor }: FieldWrapProps) {
   return (
     <div className="group relative">
       <label
         htmlFor={htmlFor}
         className={cn(
           "block text-[11px] font-semibold tracking-[0.08em] mb-2 transition-colors duration-150",
-          active ? "text-accent" : filled ? "text-foreground" : "text-muted-foreground"
+          error ? "text-destructive" : active ? "text-accent" : filled ? "text-foreground" : "text-muted-foreground"
         )}
       >
         {label}
         {required && <span className="text-accent ml-1">*</span>}
       </label>
       {children}
-      {hint && (
+      {error ? (
+        <p id={`${htmlFor}-error`} className="mt-1.5 text-[11px] font-medium text-destructive">
+          {error}
+        </p>
+      ) : hint ? (
         <p className="mt-1.5 text-[11px] text-muted-foreground">{hint}</p>
-      )}
+      ) : null}
     </div>
   );
 }
 
-function inputCls(active: boolean) {
+function borderCls(active: boolean, invalid: boolean) {
+  if (invalid) return "border-destructive";
+  return active ? "border-accent" : "border-border hover:border-foreground/30";
+}
+
+function inputCls(active: boolean, invalid = false) {
   return cn(
     "w-full h-11 bg-transparent font-sans text-sm text-foreground",
     "border-0 border-b-2 outline-none transition-all duration-200",
     "placeholder:text-muted-foreground/40",
-    active
-      ? "border-accent"
-      : "border-border hover:border-foreground/30"
+    borderCls(active, invalid)
   );
 }
 
-function selectCls(active: boolean, empty: boolean) {
+function selectCls(active: boolean, empty: boolean, invalid = false) {
   return cn(
     "w-full h-11 bg-transparent font-sans text-sm appearance-none pr-8",
     "border-0 border-b-2 outline-none transition-all duration-200 cursor-pointer",
-    active ? "border-accent" : "border-border hover:border-foreground/30",
+    borderCls(active, invalid),
     empty ? "text-muted-foreground/40" : "text-foreground"
   );
 }
@@ -131,6 +125,12 @@ function LogoMark({ className }: { className?: string }) {
   );
 }
 
+// Prevents the focused field from blurring on press: a blur-time error would
+// shift the layout and move the button out from under the click.
+function keepFieldFocus(e: React.MouseEvent) {
+  e.preventDefault();
+}
+
 function StepDot({ done, active }: { done: boolean; active: boolean }) {
   return (
     <div
@@ -148,6 +148,8 @@ export default function RmaForm() {
   const [active, setActive] = useState<keyof FormData | null>(null);
   const [dark, setDark] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [errors, setErrors] = useState<RmaFieldErrors>({});
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const id = useId();
 
@@ -162,13 +164,34 @@ export default function RmaForm() {
 
   const fieldId = (name: string) => `${id}-${name}`;
 
-  const set = useCallback(
+  const set =
     (field: keyof FormData) =>
-      (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-        setForm((p) => ({ ...p, [field]: e.target.value }));
-      },
-    []
-  );
+    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+      const next = { ...form, [field]: e.target.value };
+      setForm(next);
+      // Re-check only fields already flagged so errors clear as they're fixed
+      if (errors[field]) {
+        setErrors((prev) => ({ ...prev, [field]: validateRmaField(field, next) }));
+      }
+    };
+
+  const handleBlur = (field: keyof FormData) => {
+    setActive(null);
+    if (form[field] !== "" || errors[field]) {
+      setErrors((prev) => ({ ...prev, [field]: validateRmaField(field, form) }));
+    }
+  };
+
+  const bind = (field: keyof FormData) => ({
+    id: fieldId(field),
+    name: field,
+    value: form[field],
+    onChange: set(field),
+    onFocus: () => setActive(field),
+    onBlur: () => handleBlur(field),
+    "aria-invalid": errors[field] ? true : undefined,
+    "aria-describedby": errors[field] ? `${fieldId(field)}-error` : undefined,
+  });
 
   const filled = (f: keyof FormData) => form[f] !== "";
 
@@ -188,22 +211,38 @@ export default function RmaForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitError(null);
+
+    const result = validateRma(form);
+    if (!result.success) {
+      setErrors(result.errors);
+      const firstInvalid = FIELD_ORDER.find((f) => result.errors[f]);
+      if (firstInvalid) document.getElementById(fieldId(firstInvalid))?.focus();
+      return;
+    }
+
+    setErrors({});
     setSubmitting(true);
     try {
       const response = await fetch("/api/send-rma", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify(result.data),
       });
       if (response.ok) {
+        setForm({ ...result.data });
         setSubmitted(true);
-      } else {
-        console.error("[v0] Failed to submit RMA:", await response.text());
-        alert("Failed to submit RMA. Please try again.");
+        return;
       }
+
+      const body = await response.json().catch(() => null);
+      if (response.status === 400 && body?.fieldErrors) {
+        setErrors(body.fieldErrors);
+      }
+      setSubmitError(body?.error ?? "Failed to submit RMA. Please try again.");
     } catch (error) {
-      console.error("[v0] Submit error:", error);
-      alert("Error submitting RMA. Please try again.");
+      console.error("[rma-form] Submit error:", error);
+      setSubmitError("Network error while submitting. Please try again.");
     } finally {
       setSubmitting(false);
     }
@@ -211,6 +250,8 @@ export default function RmaForm() {
 
   const handleReset = () => {
     setForm(INITIAL_FORM);
+    setErrors({});
+    setSubmitError(null);
     setSubmitted(false);
     setActive(null);
   };
@@ -370,78 +411,58 @@ export default function RmaForm() {
 
             <div className="grid grid-cols-6 gap-x-6 gap-y-8">
               <div className="col-span-2">
-                <FieldWrap label="RMA #" required htmlFor={fieldId("rmaNumber")} active={active === "rmaNumber"} filled={filled("rmaNumber")}>
+                <FieldWrap label="RMA #" required htmlFor={fieldId("rmaNumber")} error={errors.rmaNumber} active={active === "rmaNumber"} filled={filled("rmaNumber")}>
                   <input
-                    id={fieldId("rmaNumber")}
+                    {...bind("rmaNumber")}
                     type="text"
                     placeholder="1850"
-                    value={form.rmaNumber}
-                    onChange={set("rmaNumber")}
-                    onFocus={() => setActive("rmaNumber")}
-                    onBlur={() => setActive(null)}
-                    className={inputCls(active === "rmaNumber")}
+                    className={inputCls(active === "rmaNumber", !!errors.rmaNumber)}
                     required
                   />
                 </FieldWrap>
               </div>
 
               <div className="col-span-4">
-                <FieldWrap label="Customer" required htmlFor={fieldId("customer")} active={active === "customer"} filled={filled("customer")}>
+                <FieldWrap label="Customer" required htmlFor={fieldId("customer")} error={errors.customer} active={active === "customer"} filled={filled("customer")}>
                   <input
-                    id={fieldId("customer")}
+                    {...bind("customer")}
                     type="text"
                     placeholder="Mayo Foundation"
-                    value={form.customer}
-                    onChange={set("customer")}
-                    onFocus={() => setActive("customer")}
-                    onBlur={() => setActive(null)}
-                    className={inputCls(active === "customer")}
+                    className={inputCls(active === "customer", !!errors.customer)}
                     required
                   />
                 </FieldWrap>
               </div>
 
               <div className="col-span-3">
-                <FieldWrap label="Date Opened" required htmlFor={fieldId("dateOpened")} active={active === "dateOpened"} filled={filled("dateOpened")}>
+                <FieldWrap label="Date Opened" required htmlFor={fieldId("dateOpened")} error={errors.dateOpened} active={active === "dateOpened"} filled={filled("dateOpened")}>
                   <input
-                    id={fieldId("dateOpened")}
+                    {...bind("dateOpened")}
                     type="date"
-                    value={form.dateOpened}
-                    onChange={set("dateOpened")}
-                    onFocus={() => setActive("dateOpened")}
-                    onBlur={() => setActive(null)}
-                    className={inputCls(active === "dateOpened")}
+                    className={inputCls(active === "dateOpened", !!errors.dateOpened)}
                     required
                   />
                 </FieldWrap>
               </div>
 
               <div className="col-span-1">
-                <FieldWrap label="Initial" htmlFor={fieldId("initial")} active={active === "initial"} filled={filled("initial")}>
+                <FieldWrap label="Initial" htmlFor={fieldId("initial")} error={errors.initial} active={active === "initial"} filled={filled("initial")}>
                   <input
-                    id={fieldId("initial")}
+                    {...bind("initial")}
                     type="text"
                     placeholder="MH"
                     maxLength={4}
-                    value={form.initial}
-                    onChange={set("initial")}
-                    onFocus={() => setActive("initial")}
-                    onBlur={() => setActive(null)}
-                    className={cn(inputCls(active === "initial"), "uppercase")}
+                    className={cn(inputCls(active === "initial", !!errors.initial), "uppercase")}
                   />
                 </FieldWrap>
               </div>
 
               <div className="col-span-2">
-                <FieldWrap label="RMA Type" required htmlFor={fieldId("rmaType")} active={active === "rmaType"} filled={filled("rmaType")}>
+                <FieldWrap label="RMA Type" required htmlFor={fieldId("rmaType")} error={errors.rmaType} active={active === "rmaType"} filled={filled("rmaType")}>
                   <div className="relative">
                     <select
-                      id={fieldId("rmaType")}
-                      value={form.rmaType}
-                      onChange={set("rmaType")}
-                      onFocus={() => setActive("rmaType")}
-                      onBlur={() => setActive(null)}
-                      className={selectCls(active === "rmaType", !form.rmaType)}
+                      {...bind("rmaType")}
+                      className={selectCls(active === "rmaType", !form.rmaType, !!errors.rmaType)}
                       required
                     >
                       <option value="" disabled>Select...</option>
@@ -473,80 +494,60 @@ export default function RmaForm() {
 
             <div className="grid grid-cols-6 gap-x-6 gap-y-8">
               <div className="col-span-6">
-                <FieldWrap label="Product Name" required htmlFor={fieldId("productName")} active={active === "productName"} filled={filled("productName")}>
+                <FieldWrap label="Product Name" required htmlFor={fieldId("productName")} error={errors.productName} active={active === "productName"} filled={filled("productName")}>
                   <input
-                    id={fieldId("productName")}
+                    {...bind("productName")}
                     type="text"
                     placeholder="Clarus Digital Inspection Scope, 1mm x 110cm"
-                    value={form.productName}
-                    onChange={set("productName")}
-                    onFocus={() => setActive("productName")}
-                    onBlur={() => setActive(null)}
-                    className={inputCls(active === "productName")}
+                    className={inputCls(active === "productName", !!errors.productName)}
                     required
                   />
                 </FieldWrap>
               </div>
 
               <div className="col-span-3">
-                <FieldWrap label="Model #" required htmlFor={fieldId("modelNumber")} active={active === "modelNumber"} filled={filled("modelNumber")}>
+                <FieldWrap label="Model #" required htmlFor={fieldId("modelNumber")} error={errors.modelNumber} active={active === "modelNumber"} filled={filled("modelNumber")}>
                   <input
-                    id={fieldId("modelNumber")}
+                    {...bind("modelNumber")}
                     type="text"
                     placeholder="CB1-110"
-                    value={form.modelNumber}
-                    onChange={set("modelNumber")}
-                    onFocus={() => setActive("modelNumber")}
-                    onBlur={() => setActive(null)}
-                    className={cn(inputCls(active === "modelNumber"), "font-mono")}
+                    className={cn(inputCls(active === "modelNumber", !!errors.modelNumber), "font-mono")}
                     required
                   />
                 </FieldWrap>
               </div>
 
               <div className="col-span-3">
-                <FieldWrap label="Product Line" htmlFor={fieldId("productLine")} active={active === "productLine"} filled={filled("productLine")}>
+                <FieldWrap label="Product Line" htmlFor={fieldId("productLine")} error={errors.productLine} active={active === "productLine"} filled={filled("productLine")}>
                   <input
-                    id={fieldId("productLine")}
+                    {...bind("productLine")}
                     type="text"
                     placeholder="Clarus Inspection"
-                    value={form.productLine}
-                    onChange={set("productLine")}
-                    onFocus={() => setActive("productLine")}
-                    onBlur={() => setActive(null)}
-                    className={inputCls(active === "productLine")}
+                    className={inputCls(active === "productLine", !!errors.productLine)}
                   />
                 </FieldWrap>
               </div>
 
               <div className="col-span-2">
-                <FieldWrap label="Qty Returned" required htmlFor={fieldId("quantityReturned")} active={active === "quantityReturned"} filled={filled("quantityReturned")}>
+                <FieldWrap label="Qty Returned" required htmlFor={fieldId("quantityReturned")} error={errors.quantityReturned} active={active === "quantityReturned"} filled={filled("quantityReturned")}>
                   <input
-                    id={fieldId("quantityReturned")}
+                    {...bind("quantityReturned")}
                     type="number"
                     min={1}
                     placeholder="1"
-                    value={form.quantityReturned}
-                    onChange={set("quantityReturned")}
-                    onFocus={() => setActive("quantityReturned")}
-                    onBlur={() => setActive(null)}
-                    className={inputCls(active === "quantityReturned")}
+                    className={inputCls(active === "quantityReturned", !!errors.quantityReturned)}
                     required
                   />
                 </FieldWrap>
               </div>
 
               <div className="col-span-4">
-                <FieldWrap label="Serial / Lot Number" htmlFor={fieldId("serialLotNumber")} active={active === "serialLotNumber"} filled={filled("serialLotNumber")}>
+                <FieldWrap label="Serial / Lot Number" htmlFor={fieldId("serialLotNumber")} error={errors.serialLotNumber} active={active === "serialLotNumber"} filled={filled("serialLotNumber")}>
                   <input
-                    id={fieldId("serialLotNumber")}
+                    {...bind("serialLotNumber")}
                     type="text"
                     placeholder="SN 7487"
-                    value={form.serialLotNumber}
-                    onChange={set("serialLotNumber")}
-                    onFocus={() => setActive("serialLotNumber")}
-                    onBlur={() => setActive(null)}
-                    className={cn(inputCls(active === "serialLotNumber"), "font-mono")}
+                    className={cn(inputCls(active === "serialLotNumber", !!errors.serialLotNumber), "font-mono")}
                   />
                 </FieldWrap>
               </div>
@@ -572,25 +573,20 @@ export default function RmaForm() {
               label="Description of Problem"
               required
               htmlFor={fieldId("customerDescription")}
+              error={errors.customerDescription}
               active={active === "customerDescription"}
               filled={filled("customerDescription")}
               hint="Include any relevant context, complaint details, or handling instructions."
             >
               <textarea
-                id={fieldId("customerDescription")}
+                {...bind("customerDescription")}
                 rows={4}
                 placeholder="e.g. Complaint: Per Andy, please scrap."
-                value={form.customerDescription}
-                onChange={set("customerDescription")}
-                onFocus={() => setActive("customerDescription")}
-                onBlur={() => setActive(null)}
                 className={cn(
                   "w-full bg-transparent font-sans text-sm text-foreground resize-none",
                   "border-0 border-b-2 outline-none transition-all duration-200 pt-1 pb-2 leading-relaxed",
                   "placeholder:text-muted-foreground/40",
-                  active === "customerDescription"
-                    ? "border-accent"
-                    : "border-border hover:border-foreground/30"
+                  borderCls(active === "customerDescription", !!errors.customerDescription)
                 )}
                 required
               />
@@ -598,9 +594,15 @@ export default function RmaForm() {
           </section>
 
           {/* ── Actions ── */}
+          {submitError && (
+            <p role="alert" className="mb-6 text-sm font-medium text-destructive">
+              {submitError}
+            </p>
+          )}
           <div className="flex items-center justify-between gap-4 pt-2">
             <button
               type="button"
+              onMouseDown={keepFieldFocus}
               onClick={handleReset}
               className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium"
             >
@@ -608,6 +610,7 @@ export default function RmaForm() {
             </button>
             <button
               type="submit"
+              onMouseDown={keepFieldFocus}
               disabled={submitting}
               className={cn(
                 "inline-flex items-center gap-2 px-6 h-11 rounded-full font-semibold text-sm",

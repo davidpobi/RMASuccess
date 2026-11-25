@@ -1,46 +1,50 @@
 import { Resend } from "resend";
-
-const resend = new Resend(process.env.RESEND_API_KEY);
-
-interface RMASubmissionData {
-  rmaNumber: string;
-  customer: string;
-  dateOpened: string;
-  initial: string;
-  rmaType: string;
-  productName: string;
-  modelNumber: string;
-  productLine: string;
-  quantityReturned: string;
-  serialLotNumber: string;
-  customerDescription: string;
-}
+import { escapeHtml, validateRma } from "@/lib/validations";
 
 // Helper to build alternating table rows for the email
 function buildRow(label: string, value: string, shaded = false): string {
   const bg = shaded ? "#f8fafc" : "#ffffff";
   return `<tr style="background:${bg};">
     <td style="padding:11px 18px;font-size:11px;font-weight:600;color:#7a9ab0;letter-spacing:0.08em;text-transform:uppercase;white-space:nowrap;border-bottom:1px solid #e4eaf0;width:38%;">${label}</td>
-    <td style="padding:11px 18px;font-size:14px;color:#0e1a2b;font-weight:500;border-bottom:1px solid #e4eaf0;">${value || "—"}</td>
+    <td style="padding:11px 18px;font-size:14px;color:#0e1a2b;font-weight:500;border-bottom:1px solid #e4eaf0;">${escapeHtml(value) || "—"}</td>
   </tr>`;
 }
 
 export async function POST(request: Request) {
+  let body: unknown;
   try {
-    const data: RMASubmissionData = await request.json();
+    body = await request.json();
+  } catch {
+    return Response.json(
+      { error: "A valid JSON request body is required" },
+      { status: 400 }
+    );
+  }
 
-    // Parse comma-separated business emails
-    const businessMails = (process.env.BUSINESS_MAILS || "")
-      .split(",")
-      .map((email) => email.trim())
-      .filter((email) => email.length > 0);
+  const result = validateRma(body);
+  if (!result.success) {
+    return Response.json(
+      { error: "Invalid RMA submission", fieldErrors: result.errors },
+      { status: 400 }
+    );
+  }
+  const data = result.data;
 
-    if (businessMails.length === 0) {
-      return Response.json(
-        { error: "No business emails configured" },
-        { status: 400 }
-      );
-    }
+  // Parse comma-separated business emails
+  const businessMails = (process.env.BUSINESS_MAILS || "")
+    .split(",")
+    .map((email) => email.trim())
+    .filter((email) => email.length > 0);
+
+  if (!process.env.RESEND_API_KEY || businessMails.length === 0) {
+    console.error("[send-rma] RESEND_API_KEY or BUSINESS_MAILS is not configured");
+    return Response.json(
+      { error: "RMA submissions are temporarily unavailable" },
+      { status: 500 }
+    );
+  }
+
+  try {
 
     const htmlEmail = `<!DOCTYPE html>
 <html lang="en">
@@ -98,8 +102,8 @@ export async function POST(request: Request) {
                 <tr>
                   <td style="border-left:3px solid #3ab5c6;padding-left:16px;">
                     <p style="margin:0 0 4px;font-size:11px;font-weight:600;color:#7a9ab0;letter-spacing:0.12em;text-transform:uppercase;">Return Merchandise Authorization</p>
-                    <p style="margin:0;font-size:28px;font-weight:700;color:#0e1a2b;letter-spacing:-0.02em;line-height:1.1;">RMA #${data.rmaNumber}</p>
-                    <p style="margin:6px 0 0;font-size:15px;color:#3d566e;font-weight:500;">${data.customer}</p>
+                    <p style="margin:0;font-size:28px;font-weight:700;color:#0e1a2b;letter-spacing:-0.02em;line-height:1.1;">RMA #${escapeHtml(data.rmaNumber)}</p>
+                    <p style="margin:6px 0 0;font-size:15px;color:#3d566e;font-weight:500;">${escapeHtml(data.customer)}</p>
                   </td>
                 </tr>
               </table>
@@ -128,7 +132,7 @@ export async function POST(request: Request) {
               <p style="margin:0 0 12px;font-size:10px;font-weight:700;color:#3ab5c6;letter-spacing:0.14em;text-transform:uppercase;">Customer Description</p>
               <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e4eaf0;border-radius:6px;overflow:hidden;margin-bottom:8px;">
                 <tr>
-                  <td style="padding:16px 18px;font-size:14px;color:#1e3347;line-height:1.6;">${data.customerDescription.replace(/\n/g, "<br/>")}</td>
+                  <td style="padding:16px 18px;font-size:14px;color:#1e3347;line-height:1.6;">${escapeHtml(data.customerDescription).replace(/\r?\n/g, "<br/>")}</td>
                 </tr>
               </table>
 
@@ -175,7 +179,8 @@ export async function POST(request: Request) {
     ].join("\n");
 
     // Send email to all business addresses
-    const response = await resend.emails.send({
+    const resend = new Resend(process.env.RESEND_API_KEY);
+    const { data: sent, error } = await resend.emails.send({
       from: process.env.SENDER_MAIL || "noreply@rmasuccess.com",
       to: businessMails,
       subject: `RMA #${data.rmaNumber} — ${data.customer}`,
@@ -183,9 +188,17 @@ export async function POST(request: Request) {
       text: plainText,
     });
 
-    return Response.json({ success: true, response });
+    if (error) {
+      console.error("[send-rma] Resend error:", error);
+      return Response.json(
+        { error: "Failed to send email" },
+        { status: 502 }
+      );
+    }
+
+    return Response.json({ success: true, id: sent?.id });
   } catch (error) {
-    console.error("[v0] Email send error:", error);
+    console.error("[send-rma] Email send error:", error);
     return Response.json(
       { error: "Failed to send email" },
       { status: 500 }

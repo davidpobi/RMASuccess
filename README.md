@@ -2,9 +2,9 @@
 
 > **Medical-device returns, captured correctly the first time.**
 
-[![RMASuccess — return request form](https://firebasestorage.googleapis.com/v0/b/bashbash-labs.firebasestorage.app/o/projects%2FRMASuccess%2Fdesktop-form-light.png?alt=media&token=b4b59536-400a-4cce-91da-7460437d908b)](https://rmasuccess.vercel.app)
+[![RMASuccess — return request form](https://firebasestorage.googleapis.com/v0/b/bashbash-labs.firebasestorage.app/o/projects%2FRMASuccess%2Fdesktop-form-light.png?alt=media&token=b4b59536-400a-4cce-91da-7460437d908b)](https://rmasuccess.vercel.app/)
 
-**[Open the live portal ↗](https://rmasuccess.vercel.app)**
+**Live demo: [rmasuccess.vercel.app ↗](https://rmasuccess.vercel.app/)**
 
 RMASuccess is a Return Merchandise Authorization (RMA) intake portal for medical-device teams. It replaces the spreadsheet-and-email shuffle with a single, keyboard-first form that validates every field, gives the submitter a clear receipt, and lands a structured, branded notification in the quality team's inbox.
 
